@@ -18,7 +18,6 @@ func Jacobi(a, b *big.Int) int {
 	var (
 		s = 1
 		c = new(big.Int)
-		d = new(big.Int)
 	)
 
 	for {
@@ -32,30 +31,27 @@ func Jacobi(a, b *big.Int) int {
 		}
 
 		i := trailingZeroes(a)
-		a.Rsh(a, i)
+		c.Rsh(a, i)
 
-		// Instead of computing a new value for s for each shift, only do it once
-		// if i is odd, since (-1)^2 == 1.
+		// a and b are now odd, positive and coprime. Law of Quadratic
+		// Reciprocity applies.
+
 		if i&1 == 1 {
-			// a is even, s *= (-1)^((b^2-1)/8)
-			c.Set(b).Mul(c, c).Sub(c, one).Rsh(c, 3)
-			if c.Bit(0) == 1 {
+			// J(2a,b) = -1 if b = 3 or 5 (mod 8)
+			if m := b.Bits()[0] & 7; m == 3 || m == 5 {
 				s = -s
 			}
 		}
 
-		// a is odd, s *= (-1)^((a-1)(b-1)/4)
-		c.Set(a).Sub(c, one)
-		d.Set(b).Sub(d, one)
-		c.Mul(c, d).Rsh(c, 2)
-		if c.Bit(0) == 1 {
+		// J(c,b)J(b,c) = -1 if n = m = 3 (mod 4)
+		n := c.Bits()[0] & 3
+		m := b.Bits()[0] & 3
+		if n == 3 && m == 3 {
 			s = -s
 		}
 
-		// a = b % a, b = a
-		c.Mod(b, a)
-		b.Set(a)
-		a.Set(c)
+		a.Set(b)
+		b.Set(c)
 	}
 }
 
