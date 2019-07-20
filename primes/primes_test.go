@@ -1,17 +1,18 @@
 package primes
 
 import (
+	crand "crypto/rand"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
 )
 
-const iters = 500
+const iters = 1000
 
 func TestJacobi(t *testing.T) {
-	for i := int64(0); i < 500; i++ {
-		for j := int64(1); j < 500; j += 2 {
+	for i := int64(0); i < iters; i++ {
+		for j := int64(1); j < iters; j += 2 {
 			assertJacobi(t, big.NewInt(i), big.NewInt(j))
 		}
 	}
@@ -22,9 +23,30 @@ var (
 )
 
 func TestJacobiLarge(t *testing.T) {
-	for n := 0; n < 500; n++ {
+	for n := 0; n < iters; n++ {
 		i, j := randInputs(384)
 		assertJacobi(t, i, j)
+	}
+}
+
+func TestIs(t *testing.T) {
+	max := new(big.Int).Lsh(big.NewInt(1), 512)
+	for i := 0; i < iters; i++ {
+		j, err := crand.Int(crand.Reader, max)
+		if err != nil {
+			t.Fatalf("Failed to generate random prime candidate: %v", err)
+		}
+
+		// odds of false positive is 2^(-64)==2^2^(-32)=4^(-32)
+		actual, err := Is(j, 64)
+		if err != nil {
+			t.Fatalf("Failed to check primality: %v", err)
+		}
+		exp := j.ProbablyPrime(32)
+
+		if actual != exp {
+			t.Fatalf("Expected Is(%s) == %t, got %t", j.String(), exp, actual)
+		}
 	}
 }
 

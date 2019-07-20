@@ -1,6 +1,7 @@
 package primes
 
 import (
+	"crypto/rand"
 	"math/big"
 	"math/bits"
 )
@@ -8,7 +9,41 @@ import (
 var (
 	zero = big.NewInt(0)
 	one  = big.NewInt(1)
+	two  = big.NewInt(2)
 )
+
+// Is performs a Solovay-Strassen primality test on p. The probability of a false
+// positive is at most 2^(-n).
+func Is(p *big.Int, n int) (bool, error) {
+	p = new(big.Int).Set(p)
+	limit := new(big.Int).Sub(p, two)
+
+	// pow = (p-1)/2
+	pow := new(big.Int).Set(p)
+	pow.Sub(pow, one).Rsh(pow, 1)
+
+	for i := 0; i < n; i++ {
+		a, err := rand.Int(rand.Reader, limit)
+		if err != nil {
+			return false, err
+		}
+		a.Add(a, two) // a is random in [2,p)
+
+		j := Jacobi(a, p)
+		if j == 0 {
+			return false, nil
+		}
+		jm := big.NewInt(int64(j))
+		jm.Mod(jm, p)
+
+		// Check if a^((p-1)/2) == j (mod p)
+		m := a.Exp(a, pow, p)
+		if m.Cmp(jm) != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
+}
 
 // Jacobi computes the Jacobi symbol of a and b.
 func Jacobi(a, b *big.Int) int {
