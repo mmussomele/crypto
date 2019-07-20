@@ -12,6 +12,30 @@ var (
 	two  = big.NewInt(2)
 )
 
+// Find finds a random prime number of at least b bits. The probability that the
+// returned number is not prime is at most 2^(-n).
+func Find(b, n int) (*big.Int, error) {
+	p := new(big.Int)
+	buf := make([]byte, (b+7)/8)
+	_, err := rand.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	p.SetBytes(buf)
+	p.SetBit(p, b, 1) // Ensure p is at least b bits
+	p.SetBit(p, 0, 1) // Ensure p is odd
+
+	for {
+		switch ok, err := Is(p, n); {
+		case err != nil:
+			return nil, err
+		case ok:
+			return p, nil
+		}
+		p.Add(p, two)
+	}
+}
+
 // Is performs a Solovay-Strassen primality test on p. The probability of a false
 // positive is at most 2^(-n).
 func Is(p *big.Int, n int) (bool, error) {

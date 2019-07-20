@@ -50,6 +50,84 @@ func TestIs(t *testing.T) {
 	}
 }
 
+// TestFind is slow, using -testing.count to run more
+func TestFind(t *testing.T) {
+	const bits = 2048
+	p, err := Find(bits, 64)
+	if err != nil {
+		t.Fatalf("Failed to generate random prime candidate: %v", err)
+	}
+
+	gotBits := p.BitLen()
+	if gotBits < bits {
+		t.Fatalf("Expected at least %d bits, got %d", bits, gotBits)
+	}
+
+	if !p.ProbablyPrime(32) {
+		t.Fatal("Generated composite number")
+	}
+}
+
+func BenchmarkFind16(b *testing.B) {
+	benchmarkFind(16, b)
+}
+
+func BenchmarkFind32(b *testing.B) {
+	benchmarkFind(32, b)
+}
+
+func BenchmarkFind64(b *testing.B) {
+	benchmarkFind(64, b)
+}
+
+func BenchmarkFind128(b *testing.B) {
+	benchmarkFind(128, b)
+}
+
+func BenchmarkFind512(b *testing.B) {
+	benchmarkFind(512, b)
+}
+
+func BenchmarkFind2048(b *testing.B) {
+	benchmarkFind(2048, b)
+}
+
+func BenchmarkStdlibFind16(b *testing.B) {
+	benchmarkStdlibFind(16, b)
+}
+
+func BenchmarkStdlibFind32(b *testing.B) {
+	benchmarkStdlibFind(32, b)
+}
+
+func BenchmarkStdlibFind64(b *testing.B) {
+	benchmarkStdlibFind(64, b)
+}
+
+func BenchmarkStdlibFind128(b *testing.B) {
+	benchmarkStdlibFind(128, b)
+}
+
+func BenchmarkStdlibFind512(b *testing.B) {
+	benchmarkStdlibFind(512, b)
+}
+
+func BenchmarkStdlibFind2048(b *testing.B) {
+	benchmarkStdlibFind(2048, b)
+}
+
+func benchmarkFind(bits int, b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		Find(bits, 40) // Stdlib uses 4^(-20), we use 2^(-40)
+	}
+}
+
+func benchmarkStdlibFind(bits int, b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		crand.Prime(crand.Reader, bits)
+	}
+}
+
 func assertJacobi(t *testing.T, i, j *big.Int) {
 	actual := Jacobi(new(big.Int).Set(i), new(big.Int).Set(j))
 	exp := big.Jacobi(new(big.Int).Set(i), new(big.Int).Set(j))
