@@ -26,16 +26,39 @@ func Find(b, n int) (*big.Int, error) {
 	if p.BitLen() < b {
 		p.SetBit(p, b-1, 1) // Ensure p is at least b bits
 	}
-	p.SetBit(p, 0, 1) // Ensure p is odd
+	return FindNext(p, n)
+}
 
+// FindNext finds the first prime number bigger than or equal to n. The probability that
+// the returned number is not prime is at most 2^(-n).
+func FindNext(s *big.Int, n int) (*big.Int, error) {
+	s = new(big.Int).SetBit(s, 0, 1)
 	for {
-		switch ok, err := Is(p, n); {
+		switch ok, err := Is(s, n); {
 		case err != nil:
 			return nil, err
 		case ok:
-			return p, nil
+			return s, nil
 		}
-		p.Add(p, two)
+		s.Add(s, two)
+	}
+}
+
+// FindPrevious finds the first prime number smaller than or equal to n. The probability
+// that the returned number is not prime is at most 2^(-n).
+func FindPrevious(s *big.Int, n int) (*big.Int, error) {
+	s = new(big.Int).Set(s)
+	if s.Bit(0) == 0 {
+		s.Sub(s, one)
+	}
+	for {
+		switch ok, err := Is(s, n); {
+		case err != nil:
+			return nil, err
+		case ok:
+			return s, nil
+		}
+		s.Sub(s, two)
 	}
 }
 
