@@ -23,7 +23,9 @@ func Find(b, n int) (*big.Int, error) {
 		return nil, err
 	}
 	p.SetBytes(buf)
-	p.SetBit(p, b, 1) // Ensure p is at least b bits
+	if p.BitLen() < b {
+		p.SetBit(p, b-1, 1) // Ensure p is at least b bits
+	}
 	p.SetBit(p, 0, 1) // Ensure p is odd
 
 	for {
