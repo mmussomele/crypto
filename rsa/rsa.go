@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/mmussomele/crypto/primes"
+	"github.com/mmussomele/crypto/rand"
 )
 
 // PrivateKey is an RSA private key.
@@ -33,6 +34,7 @@ func NewKey(bits int) (PrivateKey, PublicKey, error) {
 	if bits < 8 {
 		panic("crypto/rsa: bits must be at least 8")
 	}
+
 	var (
 		p1   = new(big.Int)
 		q1   = new(big.Int)
@@ -74,19 +76,59 @@ func genSecrets(bits int) (p, q, n *big.Int, err error) {
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	qBits := bits - p.BitLen()
 
+	// bitlen(pq) must equal bits. To ensure this efficiently, compute a range of
+	// values q may take, then find a prime inside that range. Adjust up or down
+	// depending on the bits in the resulting product.
+	qBits := bits - p.BitLen()
+	qMin := new(big.Int).Lsh(one, uint(qBits-1))
+	qMax := new(big.Int).Lsh(one, uint(qBits))
+	qMax.Sub(qMax, one)
+
+	diff := new(big.Int).Sub(qMax, qMin)
+
+	q, err = rand.Int(diff)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	q.Add(q, qMin)
+	q, err = primes.FindNext(q, 128)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	n = new(big.Int)
 	for {
-		// TODO: This is very slow if we gen unlucky. Be cleverer about finding a
-		// matching q.
-		q, err = primes.Find(qBits, 128)
+		n.Mul(p, q)
+		switch nb := n.BitLen(); {
+		case nb < bits:
+			q, err = jumpUp(q, qMax)
+		case nb > bits:
+			q, err = jumpDown(q, qMin)
+		default:
+			return p, q, n, nil
+		}
 		if err != nil {
 			return nil, nil, nil, err
 		}
-
-		n = new(big.Int).Mul(p, q)
-		if n.BitLen() == bits {
-			return p, q, n, nil
-		}
 	}
+}
+
+func jumpUp(q, max *big.Int) (*big.Int, error) {
+	delta := new(big.Int).Sub(max, q)
+	delta.Rsh(delta, 1)
+
+	// mid = q + (max-q)/2
+	mid := new(big.Int).Add(q, delta)
+	return primes.FindNext(mid, 128)
+}
+
+func jumpDown(q, min *big.Int) (*big.Int, error) {
+	delta := new(big.Int).Sub(q, min)
+	delta.Rsh(delta, 1)
+
+	// mid = min + (q-min)/2
+	mid := new(big.Int).Add(min, delta)
+	return primes.FindPrevious(mid, 128)
 }
