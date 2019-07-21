@@ -1,9 +1,10 @@
 package primes
 
 import (
-	"crypto/rand"
 	"math/big"
 	"math/bits"
+
+	"github.com/mmussomele/crypto/rand"
 )
 
 var (
@@ -47,7 +48,7 @@ func Is(p *big.Int, n int) (bool, error) {
 	pow.Sub(pow, one).Rsh(pow, 1)
 
 	for i := 0; i < n; i++ {
-		a, err := rand.Int(rand.Reader, limit)
+		a, err := rand.Int(limit)
 		if err != nil {
 			return false, err
 		}

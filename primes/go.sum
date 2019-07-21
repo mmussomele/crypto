@@ -1,0 +1,3 @@
+github.com/mmussomele/crypto v0.0.0-20190720035950-8b133ae65c9e h1:EALuEPBKzB3qqAYd1Ry+yeI7su0UOT0QFwTYgDZY4Tg=
+github.com/mmussomele/crypto/rand v0.0.0-20190721035130-6b359707ac5f h1:h8wJtqRf0GNIDI7PRPY2aQBZtZk7xKCF6SIP8N6sRto=
+github.com/mmussomele/crypto/rand v0.0.0-20190721035130-6b359707ac5f/go.mod h1:iaHbPkOMHaJYvsMe0jLMiVeFmzJk1Z5lHPq+fok3nS0=
