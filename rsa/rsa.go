@@ -9,13 +9,20 @@ import (
 
 // PrivateKey is an RSA private key.
 type PrivateKey struct {
-	d *big.Int
+	n    *big.Int
+	e    *big.Int
+	d    *big.Int
+	p    *big.Int
+	q    *big.Int
+	dP   *big.Int
+	dQ   *big.Int
+	qInv *big.Int
 }
 
 // PublicKey is an RSA public key.
 type PublicKey struct {
-	mod *big.Int
-	e   int64
+	n *big.Int
+	e int64
 }
 
 // E is the chosen encryption exponent.
@@ -65,7 +72,23 @@ func NewKey(bits int) (PrivateKey, PublicKey, error) {
 			continue // gcd(e, lambda(n)) != 1, try new modulus
 		}
 
-		return PrivateKey{d: d.Mod(d, n)}, PublicKey{mod: n, e: E}, nil
+		dP := new(big.Int).Mod(d, p1)
+		dQ := new(big.Int).Mod(d, q1)
+		qInv := new(big.Int).ModInverse(q, p)
+
+		priv := PrivateKey{
+			n:    n,
+			e:    e,
+			d:    d.Mod(d, n),
+			p:    p,
+			q:    q,
+			dP:   dP,
+			dQ:   dQ,
+			qInv: qInv,
+		}
+		pub := PublicKey{n: n, e: E}
+
+		return priv, pub, nil
 	}
 }
 
