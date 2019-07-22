@@ -77,58 +77,40 @@ func genSecrets(bits int) (p, q, n *big.Int, err error) {
 		return nil, nil, nil, err
 	}
 
-	// bitlen(pq) must equal bits. To ensure this efficiently, compute a range of
-	// values q may take, then find a prime inside that range. Adjust up or down
-	// depending on the bits in the resulting product.
-	qBits := bits - p.BitLen()
-	qMin := new(big.Int).Lsh(one, uint(qBits-1))
-	qMax := new(big.Int).Lsh(one, uint(qBits))
-	qMax.Sub(qMax, one)
+	// In order for n to have the desired number of bits, q must fit within the range
+	// l=2^(bits-1)/p to u=2^bits/p. The range of those values is
+	// (u-l)/p = 2^(bits-1)/p = l/p.
+	// Therefore, a valid q is found by choosing a random number l/p+rand.Int(l/p), then
+	// selecting a nearby prime.
+	qMin := new(big.Int).Lsh(one, uint(bits-1))
+	qMin.Div(qMin, p)
 
-	diff := new(big.Int).Sub(qMax, qMin)
+	qn, err := rand.Int(qMin)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	qn.Add(qn, qMin)
 
-	q, err = rand.Int(diff)
+	q, err = primes.FindNext(qn, 128)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	q.Add(q, qMin)
-	q, err = primes.FindNext(q, 128)
+	n = new(big.Int).Mul(p, q)
+	switch nb := n.BitLen(); {
+	case nb == bits:
+		return p, q, n, nil
+	case nb < bits:
+		panic(nb) // should be impossible
+	}
+
+	// qn was too close to the upper bound and n was too large. Use the previous
+	// prime instead.
+	q, err = primes.FindPrevious(qn, 128)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	n = new(big.Int)
-	for {
-		n.Mul(p, q)
-		switch nb := n.BitLen(); {
-		case nb < bits:
-			q, err = jumpUp(q, qMax)
-		case nb > bits:
-			q, err = jumpDown(q, qMin)
-		default:
-			return p, q, n, nil
-		}
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	}
-}
-
-func jumpUp(q, max *big.Int) (*big.Int, error) {
-	delta := new(big.Int).Sub(max, q)
-	delta.Rsh(delta, 1)
-
-	// mid = q + (max-q)/2
-	mid := new(big.Int).Add(q, delta)
-	return primes.FindNext(mid, 128)
-}
-
-func jumpDown(q, min *big.Int) (*big.Int, error) {
-	delta := new(big.Int).Sub(q, min)
-	delta.Rsh(delta, 1)
-
-	// mid = min + (q-min)/2
-	mid := new(big.Int).Add(min, delta)
-	return primes.FindPrevious(mid, 128)
+	n.Mul(p, q)
+	return p, q, n, nil
 }
