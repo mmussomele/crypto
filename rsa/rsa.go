@@ -1,3 +1,5 @@
+// Package rsa implements a subset of RFC 2437L PKCS #1 v2.0
+// Notably it implements RSA encryption and decryption with OAEP.
 package rsa
 
 import (
@@ -101,25 +103,60 @@ func NewKey(bits int) (*PrivateKey, error) {
 
 // Generic error messages.
 var (
-	ErrMessageTooLarge    = errors.New("crypto/rsa: message too large")
-	ErrCipherTextTooLarge = errors.New("crypto/rsa: cipher text too large")
-
-	ErrEncodingFailed = errors.New("crypto/rsa: encoding failure")
-	ErrDecodingFailed = errors.New("crypto/rsa: decoding failure")
+	ErrMessageTooLarge       = errors.New("crypto/rsa: message too large")
+	ErrCipherTextWrongLength = errors.New("crypto/rsa: cipher text wrong length")
+	ErrDecryption            = errors.New("crypto/rsa: decryption failure")
+	ErrEncoding              = errors.New("crypto/rsa: encoding failure")
+	ErrDecoding              = errors.New("crypto/rsa: decoding failure")
 )
 
-func encrypt(p *PublicKey, m *big.Int) (*big.Int, error) {
-	if m.Cmp(p.n) > 0 {
+// Encrypt encrypts m using the public key and masking (defined by h). p must be the
+// same value passed to Decrypt.
+func Encrypt(pub *PublicKey, h hash.Hash, m, p []byte) ([]byte, error) {
+	keySize := (pub.bits + 7) / 8
+	if len(m) > keySize-2*h.Size()-2 {
 		return nil, ErrMessageTooLarge
 	}
+	em, err := oaepEncode(h, m, p, keySize-1)
+	if err != nil {
+		return nil, err
+	}
+	c, err := encrypt(pub, new(big.Int).SetBytes(em))
+	if err != nil {
+		return nil, err
+	}
+	cb := c.Bytes()
+	if len(cb) < keySize {
+		pad := make([]byte, keySize-len(cb))
+		cb = append(pad, cb...)
+	}
+	return cb, nil
+}
+
+func encrypt(p *PublicKey, m *big.Int) (*big.Int, error) {
 	return new(big.Int).Exp(m, p.e, p.n), nil
 }
 
-func decrypt(p *PrivateKey, c *big.Int) (*big.Int, error) {
-	if c.Cmp(p.n) > 0 {
-		return nil, ErrCipherTextTooLarge
+// Decrypt decrypts c using the private key and masking (defined by h). p must be the
+// same value passed to Encrypt.
+func Decrypt(priv *PrivateKey, h hash.Hash, c, p []byte) ([]byte, error) {
+	keySize := (priv.bits + 7) / 8
+	if len(c) != keySize {
+		return nil, ErrCipherTextWrongLength
 	}
+	em := decrypt(priv, new(big.Int).SetBytes(c)).Bytes()
+	if len(em) < keySize-1 {
+		pad := make([]byte, keySize-len(em)-1)
+		em = append(pad, em...)
+	}
+	m, err := oaepDecode(h, em, p)
+	if err != nil {
+		return nil, ErrDecryption
+	}
+	return m, nil
+}
 
+func decrypt(p *PrivateKey, c *big.Int) *big.Int {
 	m1 := new(big.Int).Exp(c, p.dP, p.p)
 	m2 := new(big.Int).Exp(c, p.dQ, p.q)
 
@@ -129,12 +166,12 @@ func decrypt(p *PrivateKey, c *big.Int) (*big.Int, error) {
 	h.Mod(h, p.p)
 	h.Mul(h, p.q)
 	h.Add(h, m2)
-	return h, nil
+	return h
 }
 
 func oaepEncode(h hash.Hash, m, p []byte, l int) ([]byte, error) {
 	if len(m) > l-2*h.Size()-1 {
-		return nil, ErrEncodingFailed
+		return nil, ErrEncoding
 	}
 
 	padLen := l - len(m) - 2*h.Size() - 1
@@ -173,7 +210,7 @@ func oaepEncode(h hash.Hash, m, p []byte, l int) ([]byte, error) {
 
 func oaepDecode(h hash.Hash, em, p []byte) ([]byte, error) {
 	if len(em) < 2*h.Size()+1 {
-		return nil, ErrDecodingFailed
+		return nil, ErrDecoding
 	}
 
 	s, db := em[:h.Size()], em[h.Size():]
@@ -195,13 +232,13 @@ func oaepDecode(h hash.Hash, em, p []byte) ([]byte, error) {
 	ps := h.Sum(nil)
 
 	if !bytes.HasPrefix(db, ps) {
-		return nil, ErrDecodingFailed
+		return nil, ErrDecoding
 	}
 
 	db = bytes.TrimPrefix(db, ps)
 	db = bytes.TrimLeft(db, "\x00")
 	if len(db) == 0 || db[0] != 1 {
-		return nil, ErrDecodingFailed
+		return nil, ErrDecoding
 	}
 	return db[1:], nil
 }
