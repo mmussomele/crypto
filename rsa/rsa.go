@@ -21,12 +21,25 @@ type PrivateKey struct {
 	dP   *big.Int
 	dQ   *big.Int
 	qInv *big.Int
+
+	bits int
+}
+
+// PublicKey returns the public parameters of p.
+func (p *PrivateKey) PublicKey() *PublicKey {
+	return &PublicKey{
+		n:    p.n,
+		e:    p.e,
+		bits: p.bits,
+	}
 }
 
 // PublicKey is an RSA public key.
 type PublicKey struct {
 	n *big.Int
-	e int64
+	e *big.Int
+
+	bits int
 }
 
 // E is the chosen encryption exponent.
@@ -39,23 +52,12 @@ var (
 
 // NewKey generates a new RSA key pair of the requested number of bits. bits must be at
 // least 8.
-func NewKey(bits int) (PrivateKey, PublicKey, error) {
-	fail := func(err error) (PrivateKey, PublicKey, error) { return PrivateKey{}, PublicKey{}, err }
+func NewKey(bits int) (*PrivateKey, error) {
+	fail := func(err error) (*PrivateKey, error) { return nil, err }
 
-	if bits < 8 {
-		panic("crypto/rsa: bits must be at least 8")
+	if bits < 64 {
+		panic("crypto/rsa: bits must be at least 64")
 	}
-
-	var (
-		p1   = new(big.Int)
-		q1   = new(big.Int)
-		p1q1 = new(big.Int)
-
-		gcd = new(big.Int)
-		lcd = new(big.Int)
-
-		d = new(big.Int)
-	)
 
 	for {
 		p, q, n, err := genSecrets(bits)
@@ -64,14 +66,15 @@ func NewKey(bits int) (PrivateKey, PublicKey, error) {
 		}
 
 		// Compute lcd = lambda(n)
-		p1.Sub(p, one)
-		q1.Sub(q, one)
-		p1q1.Mul(p1, q1)
-		gcd.GCD(nil, nil, p1, q1)
-		lcd = p1q1.Div(p1q1, gcd)
+		p1 := new(big.Int).Sub(p, one)
+		q1 := new(big.Int).Sub(q, one)
+		p1q1 := new(big.Int).Mul(p1, q1)
+		gcd := new(big.Int).GCD(nil, nil, p1, q1)
+		lcd := new(big.Int).Div(p1q1, gcd)
 
 		// (_ * lcd) + (d * e) = 1 (mod lcd) => de = 1 (mod lcd)
-		gcd.GCD(nil, d, lcd, e)
+		d := new(big.Int)
+		gcd = new(big.Int).GCD(nil, d, lcd, e)
 		if gcd.Cmp(one) != 0 {
 			continue // gcd(e, lambda(n)) != 1, try new modulus
 		}
@@ -80,29 +83,54 @@ func NewKey(bits int) (PrivateKey, PublicKey, error) {
 		dQ := new(big.Int).Mod(d, q1)
 		qInv := new(big.Int).ModInverse(q, p)
 
-		priv := PrivateKey{
+		priv := &PrivateKey{
 			n:    n,
-			e:    e,
-			d:    d.Mod(d, n),
+			e:    new(big.Int).Set(e),
+			d:    d,
 			p:    p,
 			q:    q,
 			dP:   dP,
 			dQ:   dQ,
 			qInv: qInv,
+			bits: bits,
 		}
-		pub := PublicKey{n: n, e: E}
 
-		return priv, pub, nil
+		return priv, nil
 	}
 }
 
 // Generic error messages.
 var (
-	ErrMessageTooLarge = errors.New("crypto/rsa: message too large")
+	ErrMessageTooLarge    = errors.New("crypto/rsa: message too large")
+	ErrCipherTextTooLarge = errors.New("crypto/rsa: cipher text too large")
 
 	ErrEncodingFailed = errors.New("crypto/rsa: encoding failure")
 	ErrDecodingFailed = errors.New("crypto/rsa: decoding failure")
 )
+
+func encrypt(p *PublicKey, m *big.Int) (*big.Int, error) {
+	if m.Cmp(p.n) > 0 {
+		return nil, ErrMessageTooLarge
+	}
+	return new(big.Int).Exp(m, p.e, p.n), nil
+}
+
+func decrypt(p *PrivateKey, c *big.Int) (*big.Int, error) {
+	if c.Cmp(p.n) > 0 {
+		return nil, ErrCipherTextTooLarge
+	}
+
+	m1 := new(big.Int).Exp(c, p.dP, p.p)
+	m2 := new(big.Int).Exp(c, p.dQ, p.q)
+
+	// h = m2+ q * (qInv (m1-m2) (mod p))
+	h := new(big.Int).Sub(m1, m2)
+	h.Mul(h, p.qInv)
+	h.Mod(h, p.p)
+	h.Mul(h, p.q)
+	h.Add(h, m2)
+	return h, nil
+}
 
 func oaepEncode(h hash.Hash, m, p []byte, l int) ([]byte, error) {
 	if len(m) > l-2*h.Size()-1 {

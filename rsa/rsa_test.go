@@ -3,10 +3,54 @@ package rsa
 import (
 	"bytes"
 	"crypto/sha256"
+	"math/big"
 	"testing"
 
 	"github.com/mmussomele/crypto/rand"
 )
+
+func TestEncryption(t *testing.T) {
+	// Test powers of 2 up to 4096, plus some other numbers.
+	var sizes []int
+	for i := uint(6); i < 10; i++ {
+		sizes = append(sizes, 1<<i)
+	}
+
+	sizes = append(sizes, 135, 431, 776, 1029, 1315, 1419, 1592, 1800, 1912)
+	for _, size := range sizes {
+		priv, err := NewKey(size)
+		if err != nil {
+			t.Fatalf("Failed to generate key: %v", err)
+		}
+
+		for i := 0; i < 10; i++ {
+			max := big.NewInt(1)
+			max.Lsh(max, uint(size-1))
+			m, err := rand.Int(max)
+			if err != nil {
+				t.Fatalf("Failed to generate test message: %v", err)
+			}
+
+			c, err := encrypt(priv.PublicKey(), m)
+			switch {
+			case err != nil:
+				t.Fatalf("Failed to encrypt test message: %v", err)
+			case c.Cmp(m) == 0:
+				t.Fatal("Encrypted message matched original")
+			}
+
+			d, err := decrypt(priv, c)
+			switch {
+			case err != nil:
+				t.Fatalf("Failed to decrypt test message: %v", err)
+			case d.Cmp(c) == 0:
+				t.Fatal("Decrypted message matched encrypted message")
+			case m.Cmp(d) != 0:
+				t.Fatal("Decrypted message did not match original")
+			}
+		}
+	}
+}
 
 func TestOAEP(t *testing.T) {
 	h := sha256.New()
