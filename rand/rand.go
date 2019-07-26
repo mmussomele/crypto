@@ -9,22 +9,34 @@ import (
 
 const urandom = "/dev/urandom"
 
-var l sync.Mutex
-var reader io.Reader
+type reader struct {
+	sync.Mutex
 
-// Read fills b with random bytes.
-func Read(b []byte) (n int, err error) {
-	l.Lock()
-	defer l.Unlock()
+	src io.Reader
+}
 
-	if reader == nil {
-		reader, err = os.Open(urandom)
+func (r *reader) Read(b []byte) (n int, err error) {
+	r.Lock()
+	defer r.Unlock()
+	if r.src == nil {
+		r.src, err = os.Open(urandom)
 		if err != nil {
 			return 0, err
 		}
 	}
+	return io.ReadFull(r.src, b)
+}
 
-	return io.ReadFull(reader, b)
+var r = new(reader)
+
+// Read fills b with random bytes.
+func Read(b []byte) (n int, err error) {
+	return io.ReadFull(r, b)
+}
+
+// Reader returns a new cryptographically secure random source.
+func Reader() io.Reader {
+	return new(reader)
 }
 
 var one = big.NewInt(1)
