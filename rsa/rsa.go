@@ -144,7 +144,29 @@ func Decrypt(priv *PrivateKey, h hash.Hash, c, p []byte) ([]byte, error) {
 	if len(c) != keySize {
 		return nil, ErrCipherTextWrongLength
 	}
-	em := decrypt(priv, new(big.Int).SetBytes(c)).Bytes()
+
+	// Use blinding to stop timing attacks. Multiplying c by r^e gives
+	// c(r^e)=(m^e)(r^e) (mod n). ((m^e)(r^e))^d=m*r => m*r*rInv=m (mod n)
+	// Note: r must be coprime with N
+	var err error
+	var r, rInv *big.Int
+	for rInv == nil {
+		r, err = rand.Int(priv.n)
+		if err != nil {
+			return nil, ErrDecryption
+		}
+
+		rInv = new(big.Int).ModInverse(r, priv.n)
+	}
+	r.Exp(r, priv.e, priv.n)
+
+	bc := new(big.Int).SetBytes(c)
+	bc.Mul(bc, r).Mod(bc, priv.n)
+
+	bm := decrypt(priv, bc)
+	bm.Mul(bm, rInv).Mod(bm, priv.n)
+
+	em := bm.Bytes()
 	if len(em) < keySize-1 {
 		pad := make([]byte, keySize-len(em)-1)
 		em = append(pad, em...)
