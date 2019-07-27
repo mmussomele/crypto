@@ -2,7 +2,9 @@ package rsa
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"math/big"
 	"testing"
 
@@ -156,5 +158,54 @@ func TestOAEP(t *testing.T) {
 				t.Fatal("Succeeded decoding with wrong p")
 			}
 		}
+	}
+}
+
+func TestCompatible(t *testing.T) {
+	priv, err := NewKey(1024)
+	if err != nil {
+		t.Fatalf("Failed to generate key: %v", err)
+	}
+	b := priv.Marshal()
+
+	goKey, err := x509.ParsePKCS1PrivateKey(b)
+	if err != nil {
+		t.Fatalf("Failed to parse key: %v", err)
+	}
+
+	mustEq(t, goKey.N, priv.n)
+	mustEq(t, big.NewInt(int64(goKey.E)), priv.e)
+	mustEq(t, goKey.D, priv.d)
+	mustEq(t, goKey.Primes[0], priv.p)
+	mustEq(t, goKey.Primes[1], priv.q)
+	mustEq(t, goKey.Precomputed.Dp, priv.dP)
+	mustEq(t, goKey.Precomputed.Dq, priv.dQ)
+	mustEq(t, goKey.Precomputed.Qinv, priv.qInv)
+
+	goPriv, err := rsa.GenerateKey(rand.Reader(), 1024)
+	if err != nil {
+		t.Fatalf("Failed to generate key: %v", err)
+	}
+
+	b = x509.MarshalPKCS1PrivateKey(goPriv)
+	key := new(PrivateKey)
+	if err = key.Unmarshal(b); err != nil {
+		t.Fatalf("Failed to parse key: %v", err)
+	}
+
+	mustEq(t, goPriv.N, key.n)
+	mustEq(t, big.NewInt(int64(goPriv.E)), key.e)
+	mustEq(t, goPriv.D, key.d)
+	mustEq(t, goPriv.Primes[0], key.p)
+	mustEq(t, goPriv.Primes[1], key.q)
+	mustEq(t, goPriv.Precomputed.Dp, key.dP)
+	mustEq(t, goPriv.Precomputed.Dq, key.dQ)
+	mustEq(t, goPriv.Precomputed.Qinv, key.qInv)
+}
+
+func mustEq(t *testing.T, a, b *big.Int) {
+	t.Helper()
+	if a.Cmp(b) != 0 {
+		t.Fatal("Key parameters not equal")
 	}
 }

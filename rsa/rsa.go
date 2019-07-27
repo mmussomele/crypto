@@ -4,6 +4,7 @@ package rsa
 
 import (
 	"bytes"
+	"encoding/asn1"
 	"encoding/binary"
 	"errors"
 	"hash"
@@ -34,6 +35,57 @@ func (p *PrivateKey) PublicKey() *PublicKey {
 		e:    p.e,
 		bits: p.bits,
 	}
+}
+
+type asnPrivateKey struct {
+	Version int
+	N       *big.Int
+	E       int
+	D       *big.Int
+	P       *big.Int
+	Q       *big.Int
+	Dp      *big.Int
+	Dq      *big.Int
+	QInv    *big.Int
+}
+
+// Marshal encodes the PrivateKey in ASN.1 DER format.
+func (p *PrivateKey) Marshal() []byte {
+	b, err := asn1.Marshal(asnPrivateKey{
+		Version: 0,
+		N:       p.n,
+		E:       int(p.e.Int64()),
+		D:       p.d,
+		P:       p.p,
+		Q:       p.q,
+		Dp:      p.dP,
+		Dq:      p.dQ,
+		QInv:    p.qInv,
+	})
+	if err != nil {
+		panic(err) // should never fail
+	}
+	return b
+}
+
+// Unmarshal attempts to parse a private key from the bytes.
+func (p *PrivateKey) Unmarshal(b []byte) error {
+	var asnp asnPrivateKey
+	if _, err := asn1.Unmarshal(b, &asnp); err != nil {
+		return err
+	}
+	if asnp.Version != 0 {
+		return ErrUnsupportedKey
+	}
+	p.n = asnp.N
+	p.e = big.NewInt(int64(asnp.E))
+	p.d = asnp.D
+	p.p = asnp.P
+	p.q = asnp.Q
+	p.dP = asnp.Dp
+	p.dQ = asnp.Dq
+	p.qInv = asnp.QInv
+	return nil
 }
 
 // PublicKey is an RSA public key.
@@ -71,15 +123,7 @@ func NewKey(bits int) (*PrivateKey, error) {
 		p1 := new(big.Int).Sub(p, one)
 		q1 := new(big.Int).Sub(q, one)
 		p1q1 := new(big.Int).Mul(p1, q1)
-		gcd := new(big.Int).GCD(nil, nil, p1, q1)
-		lcd := new(big.Int).Div(p1q1, gcd)
-
-		// (_ * lcd) + (d * e) = 1 (mod lcd) => de = 1 (mod lcd)
-		d := new(big.Int)
-		gcd = new(big.Int).GCD(nil, d, lcd, e)
-		if gcd.Cmp(one) != 0 {
-			continue // gcd(e, lambda(n)) != 1, try new modulus
-		}
+		d := new(big.Int).ModInverse(e, p1q1)
 
 		dP := new(big.Int).Mod(d, p1)
 		dQ := new(big.Int).Mod(d, q1)
@@ -108,6 +152,7 @@ var (
 	ErrDecryption            = errors.New("crypto/rsa: decryption failure")
 	ErrEncoding              = errors.New("crypto/rsa: encoding failure")
 	ErrDecoding              = errors.New("crypto/rsa: decoding failure")
+	ErrUnsupportedKey        = errors.New("crypto/rsa: unsupported key version")
 )
 
 // Encrypt encrypts m using the public key and masking (defined by h). p must be the
