@@ -1,5 +1,0 @@
-github.com/mmussomele/crypto/primes v0.0.0-20190721051034-3b18c8db65a3 h1:ZTq3fxvWLYdVwQTPclTLT8jOiBHCN6ExWmNJ2jOU/1s=
-github.com/mmussomele/crypto/primes v0.0.0-20190721051034-3b18c8db65a3/go.mod h1:RJXsdXmg3K+7BZ16OUwYGwM77/Oj24ZV9hlNLC7BEhY=
-github.com/mmussomele/crypto/rand v0.0.0-20190721035130-6b359707ac5f/go.mod h1:iaHbPkOMHaJYvsMe0jLMiVeFmzJk1Z5lHPq+fok3nS0=
-github.com/mmussomele/crypto/rand v0.0.0-20190721044453-ac66a0a18ac6 h1:gk0B0ojJsOFeC5i5/eGafO9dSD6mWpDx4yDsMLP37F8=
-github.com/mmussomele/crypto/rand v0.0.0-20190721044453-ac66a0a18ac6/go.mod h1:iaHbPkOMHaJYvsMe0jLMiVeFmzJk1Z5lHPq+fok3nS0=
